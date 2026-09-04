@@ -1,0 +1,16 @@
+services:
+  service:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DOCS_ENABLED: 'false'
+    ports:
+      - '3000:3000'
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
