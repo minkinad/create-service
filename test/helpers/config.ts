@@ -12,5 +12,6 @@ export const testConfig: AppConfig = {
   DOCS_ENABLED: false,
   METRICS_ENABLED: false,
   RATE_LIMIT_MAX: 100,
+  READINESS_TIMEOUT_MS: 100,
   SHUTDOWN_TIMEOUT_MS: 1000,
 };
