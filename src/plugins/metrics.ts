@@ -19,6 +19,7 @@ export async function registerMetrics(app: FastifyInstance): Promise<void> {
     registers: [registry],
   });
 
+  app.decorateRequest('metricsStartedAt');
   app.addHook('onRequest', async (request) => {
     request.metricsStartedAt = process.hrtime.bigint();
   });
@@ -38,9 +39,15 @@ export async function registerMetrics(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.get('/metrics', { config: { rateLimit: false } }, async (_request, reply) => {
-    return reply.header('content-type', registry.contentType).send(await registry.metrics());
-  });
+  app.addHook('onClose', async () => registry.clear());
+
+  app.get(
+    '/metrics',
+    { config: { rateLimit: false }, schema: { hide: true } },
+    async (_request, reply) => {
+      return reply.header('content-type', registry.contentType).send(await registry.metrics());
+    },
+  );
 }
 
 declare module 'fastify' {

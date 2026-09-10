@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { GreetingService } from './greeting.service.js';
+import { errorResponseSchema } from '../../lib/error-response.js';
+import type { GreetingService } from './greeting.service.js';
 
 interface GreetingParams {
   name: string;
@@ -12,9 +13,14 @@ const greetingResponseSchema = {
   properties: { message: { type: 'string' } },
 } as const;
 
-export async function greetingRoutes(app: FastifyInstance): Promise<void> {
-  const service = new GreetingService();
+interface GreetingRouteOptions {
+  service: Pick<GreetingService, 'greet'>;
+}
 
+export async function greetingRoutes(
+  app: FastifyInstance,
+  { service }: GreetingRouteOptions,
+): Promise<void> {
   app.get<{ Params: GreetingParams }>(
     '/hello/:name',
     {
@@ -27,7 +33,11 @@ export async function greetingRoutes(app: FastifyInstance): Promise<void> {
           required: ['name'],
           properties: { name: { type: 'string', minLength: 1, maxLength: 80 } },
         },
-        response: { 200: greetingResponseSchema },
+        response: {
+          200: greetingResponseSchema,
+          '4xx': errorResponseSchema,
+          '5xx': errorResponseSchema,
+        },
       },
     },
     async (request) => service.greet(request.params.name),
