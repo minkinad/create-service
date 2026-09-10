@@ -1,24 +1,40 @@
 import type { FastifyInstance } from 'fastify';
+import { checkReadiness, type ReadinessCheck } from '../lib/readiness.js';
 
-export type ReadinessCheck = () => Promise<void>;
+export type { ReadinessCheck } from '../lib/readiness.js';
 
 export interface HealthRouteOptions {
   serviceName: string;
   serviceVersion: string;
   readinessChecks?: Record<string, ReadinessCheck>;
+  readinessTimeoutMs?: number;
 }
+
+const serviceProperties = {
+  service: { type: 'string' },
+  version: { type: 'string' },
+  timestamp: { type: 'string', format: 'date-time' },
+} as const;
 
 const healthSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['status', 'service', 'version', 'timestamp'],
+  required: ['status', 'service', 'version', 'timestamp', 'uptimeSeconds'],
   properties: {
-    status: { type: 'string' },
-    service: { type: 'string' },
-    version: { type: 'string' },
-    timestamp: { type: 'string', format: 'date-time' },
+    ...serviceProperties,
+    status: { type: 'string', enum: ['ok'] },
     uptimeSeconds: { type: 'number' },
-    checks: { type: 'object', additionalProperties: { type: 'string' } },
+  },
+} as const;
+
+const readinessSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['status', 'service', 'version', 'timestamp', 'checks'],
+  properties: {
+    ...serviceProperties,
+    status: { type: 'string', enum: ['ready', 'not_ready'] },
+    checks: { type: 'object', additionalProperties: { type: 'string', enum: ['up', 'down'] } },
   },
 } as const;
 
@@ -43,17 +59,16 @@ export async function healthRoutes(
 
   app.get(
     '/ready',
-    { config: { rateLimit: false }, schema: { tags: ['operations'] } },
+    {
+      config: { rateLimit: false },
+      schema: { tags: ['operations'], response: { 200: readinessSchema, 503: readinessSchema } },
+    },
     async (_request, reply) => {
-      const entries = Object.entries(options.readinessChecks ?? {});
-      const results = await Promise.allSettled(entries.map(([, check]) => check()));
-      const checks = Object.fromEntries(
-        entries.map(([name], index) => [
-          name,
-          results[index]?.status === 'fulfilled' ? 'up' : 'down',
-        ]),
+      const checks = await checkReadiness(
+        options.readinessChecks ?? {},
+        options.readinessTimeoutMs ?? 2_000,
       );
-      const ready = results.every((result) => result.status === 'fulfilled');
+      const ready = Object.values(checks).every((status) => status === 'up');
 
       return reply.status(ready ? 200 : 503).send({
         status: ready ? 'ready' : 'not_ready',

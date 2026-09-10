@@ -10,7 +10,7 @@ describe('Observability', () => {
     }
   });
 
-  it('documents business responses', async () => {
+  it('documents business responses and both readiness statuses', async () => {
     const app = await createTestApp({
       config: { ...testConfig, DOCS_ENABLED: true, METRICS_ENABLED: true },
     });
@@ -23,6 +23,7 @@ describe('Observability', () => {
     expect(document.info).toMatchObject({ title: 'test-service', version: '1.0.0-test' });
     expect(document.paths['/api/v1/hello/{name}']?.get.responses).toHaveProperty('4XX');
     expect(document.paths['/api/v1/hello/{name}']?.get.responses).toHaveProperty('5XX');
+    expect(document.paths['/ready']?.get.responses).toHaveProperty('503');
     expect(document.paths).not.toHaveProperty('/metrics');
     const ui = await app.inject('/docs/');
     expect(ui.statusCode).toBe(200);
