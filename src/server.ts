@@ -1,37 +1,27 @@
 import { buildApp } from './app.js';
 import { loadConfig } from './config/env.js';
+import { registerShutdown } from './lib/shutdown.js';
 
-const config = loadConfig();
-const app = await buildApp({ config });
-let shuttingDown = false;
-
-async function shutdown(signal: NodeJS.Signals): Promise<void> {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  app.log.info({ signal }, 'Graceful shutdown started');
-
-  const forcedExit = setTimeout(() => {
-    app.log.error('Graceful shutdown timed out');
-    process.exit(1);
-  }, config.SHUTDOWN_TIMEOUT_MS);
-  forcedExit.unref();
+async function main(): Promise<void> {
+  const config = loadConfig();
+  const app = await buildApp({ config });
+  registerShutdown(app, config.SHUTDOWN_TIMEOUT_MS);
 
   try {
-    await app.close();
-    clearTimeout(forcedExit);
-    app.log.info('Graceful shutdown completed');
+    await app.listen({ host: config.HOST, port: config.PORT });
   } catch (error) {
-    app.log.error({ err: error }, 'Graceful shutdown failed');
-    process.exitCode = 1;
+    app.log.fatal({ err: error }, 'Service failed to start');
+    try {
+      await app.close();
+    } finally {
+      process.exitCode = 1;
+    }
   }
 }
 
-process.once('SIGINT', () => void shutdown('SIGINT'));
-process.once('SIGTERM', () => void shutdown('SIGTERM'));
-
 try {
-  await app.listen({ host: config.HOST, port: config.PORT });
+  await main();
 } catch (error) {
-  app.log.fatal({ err: error }, 'Service failed to start');
+  console.error('Service bootstrap failed:', error);
   process.exitCode = 1;
 }
