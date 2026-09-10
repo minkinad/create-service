@@ -9,6 +9,7 @@ services:
       - '3000:3000'
     init: true
     restart: unless-stopped
+    stop_grace_period: 15s
     read_only: true
     tmpfs:
       - /tmp
